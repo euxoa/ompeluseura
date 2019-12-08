@@ -77,6 +77,12 @@ christmas %>% filter(!is.na(snow)) %>%
   mutate(p=apply(extract(fit2, "prob")[[1]], 2, mean)) %>% 
   ggplot(aes(x=year, y=p)) + geom_line() 
 
+apply(extract(fit2, "prob")[[1]], 2, function (x) quantile(x, c(.05, .5, .95))) %>% 
+  t() %>% as.data.frame() %>% setNames(c("pmin", "p", "pmax")) %>% 
+  mutate(year=stan_data$decade) %>%
+  ggplot(aes(x=year, ymin=pmin, y=p, ymax=pmax)) + geom_errorbar() + geom_point()
+
+
 plot(fit2, pars=c("ytrend", "sigma"))
 change_samples <- extract(fit2, "prob[1]")[[1]] - extract(fit2, "prob[60]")[[1]]
 hist(change_samples, n=100)
