@@ -16,6 +16,18 @@ readr::write_csv(christmas, "kaisaniemi_christmas.csv")
 
 stan_data <- with(christmas %>% filter(!is.na(snow)), list(decade=(year-2000)/10, snow=snow, N=length(snow)))
 
+
+first_model_code <- "
+data {
+   int N;
+   int<lower=0, upper=1> is_snow[N]; }
+parameters {
+   real b; }
+model {
+   for (i in 1:N) is_snow[i] ~ bernoulli_logit(b); }
+"
+
+
 model_str <- "
 data {
    int N;
@@ -44,7 +56,7 @@ plot(fit, pars="prob")
 
 # Vectorized state-space model
 
-model_str2 <- "
+model_str_statespace <- "
 data {
    int N;
    real<lower=0> snow[N]; }
@@ -54,7 +66,7 @@ transformed data {
 parameters {
    vector[N] innovations;
    real base;
-   real<lower=0> sigma;
+   real<lower=0> sigma_change;
    real ytrend;
    }
 model {
@@ -69,21 +81,24 @@ generated quantities {
    prob = inv_logit(base + sigma * cumulative_sum(innovations));
 }
 "
-m2 <- stan_model(model_code = model_str2)
-fit2 <- sampling(m2, data=stan_data, control=list(adapt_delta=.95))
-plot(fit2, par="prob")
+mss <- stan_model(model_code = model_str_statespace)
+fit_ss <- sampling(m2, data=stan_data, control=list(adapt_delta=.95))
+plot(fit_ss, par="prob")
 
 christmas %>% filter(!is.na(snow)) %>% 
-  mutate(p=apply(extract(fit2, "prob")[[1]], 2, mean)) %>% 
+  mutate(p=apply(extract(fit_ss, "prob")[[1]], 2, mean)) %>% 
   ggplot(aes(x=year, y=p)) + geom_line() 
 
-apply(extract(fit2, "prob")[[1]], 2, function (x) quantile(x, c(.05, .5, .95))) %>% 
+apply(extract(fit_ss, "prob")[[1]], 2, function (x) quantile(x, c(.25, .5, .75))) %>% 
   t() %>% as.data.frame() %>% setNames(c("pmin", "p", "pmax")) %>% 
   mutate(year=stan_data$decade) %>%
-  ggplot(aes(x=year, ymin=pmin, y=p, ymax=pmax)) + geom_errorbar() + geom_point()
+  ggplot(aes(x=year, ymin=pmin, y=p, ymax=pmax)) + geom_ribbon(alpha=.5) + geom_line()
 
 
-plot(fit2, pars=c("ytrend", "sigma"))
-change_samples <- extract(fit2, "prob[1]")[[1]] - extract(fit2, "prob[60]")[[1]]
+plot(fit_ss, pars=c("ytrend", "sigma"))
+ys <- data.frame(extract(fit_ss, pars=c("ytrend", "sigma")))
+ys %>% ggplot(aes(x=ytrend, y=sigma)) + geom_point(alpha=.2)
+cor(ys)
+change_samples <- extract(fit_ss, "prob[1]")[[1]] - extract(fit_ss, "prob[60]")[[1]]
 hist(change_samples, n=100)
 mean(change_samples<0)

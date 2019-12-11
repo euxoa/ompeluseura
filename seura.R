@@ -157,3 +157,26 @@ plot(fit4, par="sigma_lsigma")
 hist(extract(fit4, "k[1]")[[1]] - extract(fit4, "k[6]")[[1]], n=100)
 hist(extract(fit4, "b[1]")[[1]] - extract(fit4, "b[12]")[[1]], n=100)
 
+model_str5 <- "
+data {
+   int N;
+   real temp[N];
+}
+parameters {
+   real tlevel[N];
+   real<lower=0> obs_sigma;
+   real<lower=9> lsigma;
+}
+model {
+   for (i in 2:N) 
+      tlevel[i] ~ normal(tlevel[i-1], lsigma);
+   tlevel[1] ~ normal(-2, 5);
+   for (i in 1:N)
+       temp[i] ~ normal(tlevel[i], obs_sigma);
+   obs_sigma ~ normal(0, 5);
+   lsigma ~ normal(0, .5);
+}"
+
+m5 <- stan_model(model_code = model_str5)
+fit5 <- sampling(m5, data = with(d_year, list(N=length(temp), temp=temp)))
+
